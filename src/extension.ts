@@ -6,28 +6,31 @@ import * as noInstanceJson from './no-instance.json';
 import * as incompatiblilityJson from './incompatiblility.json';
 import * as IncompatibilityNumberJson from './Incompatibility-chooseNumber.json';
 import * as IncompatibilityStringJson from './Incompatibility-chooseString.json';
-import { execFile } from 'child_process';
-const { exec } = require('child_process')
+import { start } from 'repl';
+import { kMaxLength } from 'buffer';
+const { spawnSync } = require('child_process')
 
 const CHECKINGTYPE = 'checkingType';
 const DOCUMENT = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document : false;
 
-interface error {
-	message: string
-	locations: location[]
-}
-interface location{
-	fromLine: number
-	toLine: number
-	fromColumn: number
-	toColumn: number
+interface region {
+	tag: string
+	start: number[]
+	end: number[]
 }
 
-interface parsedJson {
-	fileName: string
-	moduleName: string
-	errors: error[] 
+interface chameleonOutput{
+	test: string
+	format: format
+	region: region
+
 }
+
+interface format{
+	tag: string
+	contents: number
+}
+
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -39,150 +42,132 @@ export function activate(context: vscode.ExtensionContext) {
 	const diagnosticsSet = vscode.languages.createDiagnosticCollection("haskellErrors");
 	context.subscriptions.push(diagnosticsSet);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let basicErrors = vscode.commands.registerCommand('haskell-debugging.showHighlight', () => {
-		const editor = vscode.window.activeTextEditor;
-		if (editor) {
-			const document = editor.document;
-			const filePath = document.fileName;
-			const fileName = filePath.split("\\").pop()?.split(".").shift();
-			switch(fileName){
-				case "No-Instance":
-					updateDiagnostics(document, diagnosticsSet, noInstanceJson);
-					break;
-				case "Incompatibility":
-					updateDiagnostics(document, diagnosticsSet, incompatiblilityJson);
-					break;
-				default:
-					vscode.window.showInformationMessage('This function can only be used with Incompatibility.hs or no-instance.hs');
-					return;
-			}
-			
-			
-		}
+	let docSelector = {
+		language: 'haskell',
+		scheme: 'file',
+	};
 
-	});
-
-	let selectType = vscode.commands.registerCommand('haskell-debugging.startTypeQuestion', () => {
-		const editor = vscode.window.activeTextEditor;
-		if (editor) {
-			const document = editor.document;
-			const filePath = document.fileName;
-			const fileName = filePath.split("\\").pop()?.split(".").shift();
-			const uri = document.uri;
-			if (fileName != "Incompatibility"){
-				vscode.window.showInformationMessage('This function can only be used with Incompatibility.hs');
-				return;
-			}
-			
-
-			const diagnostics = incompatiblilityJson.errors.map(error => error.locations.map(
-				l => new vscode.Diagnostic(new vscode.Range(l.fromLine, l.fromColumn, l.toLine, l.toColumn), error.message))).flat();
-			
-			for (let item of diagnostics) {
-				item.code = CHECKINGTYPE;
-			}      
-			diagnosticsSet.set(uri, diagnostics); 
-		}
-	});
+	let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
+		docSelector,
+		new MyCodeLensProvider()
+	);
+	  
+	//context.subscriptions.push(codeLensProviderDisposable)
 
 	let runChameleon = vscode.commands.registerCommand('haskell-debugging.runChameleon', () => {
 		const editor = vscode.window.activeTextEditor;
-		if (editor) {
-			const document = editor.document;
-			const filePath = document.fileName;
-			const fileName = filePath.split("\\").pop();
-			
-			//var spawn = require("child_process").spawn,child;
-			//child = spawn("C:\\Users\\Cody\\chameleon-master\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe",['--lib="C:\\Users\\Cody\\chameleon-master"', filePath]);
-			//child.stdout.on("data", (data: string) => {
-			//	console.log("Powershell Data: " + data);
-			//});
-			//child.stderr.on("data", (data: string) => {
-			//	console.log("Powershell Data: " + data);
-			//});
-		//`C:\\Users\\Cody\\chameleon-master\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe`, ['--lib="C:\\Users\\Cody\\chameleon-master"', 'C:\\Users\\Cody\\evelyn-extenetion\\examples\\sumLength.hs'
-			execFile('get-location', [], function (error: any, stdout: string, stderr: any) {
-				if (error) {
-					console.log(error);
-					vscode.window.showErrorMessage("Chameleon errors")
-				}
-				console.log(stdout);
-			});
-
+		const workPath = vscode.workspace.rootPath;
+		if (editor && workPath) {
+			getChemelionErrors(diagnosticsSet, editor.document);
 		}
-
-
 	});
-	context.subscriptions.push(runChameleon);
-	context.subscriptions.push(basicErrors);
-	context.subscriptions.push(selectType);
-	context.subscriptions.push(
-		vscode.languages.registerCodeActionsProvider({ scheme: 'file', language: 'haskell' }, new TypeChooser(), {
-			providedCodeActionKinds: TypeChooser.providedCodeActionKinds
-		})
-	);
 
-	context.subscriptions.push(
-		vscode.commands.registerCommand('haskell-debugging.updateDiognostics', (json) => {
-			DOCUMENT ?
-			updateDiagnostics(DOCUMENT, diagnosticsSet, json) :
-			vscode.window.showInformationMessage('This function can only be used with Incompatibility.hs');
-		})
-	);
+	let onSave = vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
+		getChemelionErrors(diagnosticsSet, document)
+	});
 
+	let onOpen = vscode.workspace.onDidOpenTextDocument((document: vscode.TextDocument) => {
+		getChemelionErrors(diagnosticsSet, document)
+	});
+
+
+	context.subscriptions.push(onOpen);
+	context.subscriptions.push(onSave)
 }
 
+const getChemelionErrors = function(diognosticSet: vscode.DiagnosticCollection, document: vscode.TextDocument) {
+	
+	const workPath = vscode.workspace.rootPath;
+	if(workPath){
+		const filePath = document.fileName;
+		const uri = document.uri;
+		const fileName = filePath.split("\\").pop();
+		
+		let json: string;
+		
+		const reletivePath = filePath.replace(workPath, '');
+		const jsonOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
+				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
+				+ reletivePath
+				+ ' --json', 
+			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
+		).stdout;
+		const messageOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
+				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
+				+ reletivePath, 
+			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
+		).stdout;
+		const printString = messageOut.split("\n").filter((a: string) => a.includes("ERROR"))[0];
+		diognosticSet.set(uri, processOutput(printString, jsonOut));
+	}
+};
 
-
-const jsonToDiagnostics = function(string: string) : vscode.Diagnostic[] {
+const processOutput = function(error: string, jsonString: string) : vscode.Diagnostic[] {
 
 	
-	const json : parsedJson= JSON.parse(string);
+	const json : chameleonOutput[] = JSON.parse(jsonString);
 
-	const diagnostics = json.errors.map((e : error) => e.locations.map(
-		l => new vscode.Diagnostic(new vscode.Range(l.fromLine, l.fromColumn, l.toLine, l.toColumn), e.message))).flat();
+	const errors = json.filter((message:chameleonOutput) => message.format.tag === "TextHL")
+	const diagnostics = errors.map((message:chameleonOutput): vscode.Diagnostic =>{
+		const start = message.region.start;
+		const end = message.region.end;
+		return new vscode.Diagnostic(new vscode.Range(start[0] - 1, start[1] - 1, end[0] - 1, end[1] - 1), error);
+	});
+
 	
 	return diagnostics;
-	} ;
+};
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
 
-const updateDiagnostics = function(document: vscode.TextDocument, diagnosticCollection: vscode.DiagnosticCollection, json: parsedJson){
-	const uri = document.uri;
+class MyCodeLensProvider implements vscode.CodeLensProvider {
+	async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
+		
+	
+		
+	
+	let topOfDocument = new vscode.Range(0, 0, 0, 0);
 
-	const diagnostics = json.errors.map(error => error.locations.map(
-		l => new vscode.Diagnostic(new vscode.Range(l.fromLine, l.fromColumn, l.toLine, l.toColumn), error.message))).flat();
-
-	diagnosticCollection.set(uri, diagnostics);
-};
-
-
-export class TypeChooser implements vscode.CodeActionProvider {
-
-	public static readonly providedCodeActionKinds = [
-		vscode.CodeActionKind.QuickFix
-	];
-
-	provideCodeActions(document: vscode.TextDocument, range: vscode.Range | vscode.Selection, context: vscode.CodeActionContext, token: vscode.CancellationToken): vscode.CodeAction[] {
-		console.log(context.diagnostics);
-		return context.diagnostics
-			.filter(diagnostic => diagnostic.code === CHECKINGTYPE)
-			.map(diagnostic => this.createCommandCodeAction(diagnostic)).flat();
+	const editor = vscode.window.activeTextEditor;
+	const workPath = vscode.workspace.rootPath;
+	if (editor && workPath) {
+		const document = editor.document;
+		const filePath = document.fileName;
+		const uri = document.uri;
+		const fileName = filePath.split("\\").pop();
+		
+		let json: string;
+		
+		const reletivePath = filePath.replace(workPath, '');
+		const jsonOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
+				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
+				+ reletivePath
+				+ ' --json', 
+			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
+		).stdout;
+		const messageOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
+				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
+				+ reletivePath, 
+			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
+		).stdout;
+		const printString = messageOut.split("\n").filter((a: string) => a.includes("ERROR"))[0];
+		const result = processOutput(printString, jsonOut);
+		if (result.length > 0){
+			const location = result[0].range
+			let c: vscode.Command = {
+				command: 'extension.addConsoleLog',
+				title: printString,
+			};
+			let codeLens = new vscode.CodeLens(location, c);
+			return [codeLens];
+		}
 	}
 
-	private createCommandCodeAction(diagnostic: vscode.Diagnostic): vscode.CodeAction[] {
-		const action = new vscode.CodeAction('type is \'whoIsRight: Bool -> String\'', vscode.CodeActionKind.QuickFix);
-		action.command = { command: 'haskell-debugging.updateDiognostics', title: 'Set to string', arguments: [IncompatibilityStringJson]};
-		action.diagnostics = [diagnostic];
-		action.isPreferred = false;
-		const action2 = new vscode.CodeAction('type is \'whoIsRight: Num a => Bool -> a\'', vscode.CodeActionKind.QuickFix);
-		action2.command = { command: 'haskell-debugging.updateDiognostics', title: 'Set to number', arguments: [IncompatibilityNumberJson]};
-		action2.diagnostics = [diagnostic];
-		action2.isPreferred = false;
-		return [action, action2];
+  
+	
+  
+  
+	return [];
 	}
-}
+  }
