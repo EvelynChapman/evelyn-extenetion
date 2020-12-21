@@ -97,24 +97,33 @@ const getChemelionErrors = function(diognosticSet: vscode.DiagnosticCollection, 
 				+ reletivePath, 
 			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
 		).stdout;
+		
+
 		const printString = messageOut.split("\n").filter((a: string) => a.includes("ERROR"))[0];
-		diognosticSet.set(uri, processOutput(printString, jsonOut));
+		
+		const diagnostics = processOutput(printString, jsonOut);
+		
+		//console.log(diagnostics)
+		diognosticSet.set(uri, diagnostics);
 	}
 };
 
+
+
+
+
 const processOutput = function(error: string, jsonString: string) : vscode.Diagnostic[] {
-
-	
+	if (jsonString === '"'){
+		return []
+	}
 	const json : chameleonOutput[] = JSON.parse(jsonString);
-
+	console.log(jsonString.length)
 	const errors = json.filter((message:chameleonOutput) => message.format.tag === "TextHL")
-	const diagnostics = errors.map((message:chameleonOutput): vscode.Diagnostic =>{
+	const diagnostics: vscode.Diagnostic[] = errors.map((message:chameleonOutput): vscode.Diagnostic =>{
 		const start = message.region.start;
 		const end = message.region.end;
 		return new vscode.Diagnostic(new vscode.Range(start[0] - 1, start[1] - 1, end[0] - 1, end[1] - 1), error);
 	});
-
-	
 	return diagnostics;
 };
 
@@ -123,51 +132,36 @@ export function deactivate() {}
 
 class MyCodeLensProvider implements vscode.CodeLensProvider {
 	async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
-		
-	
-		
-	
-	let topOfDocument = new vscode.Range(0, 0, 0, 0);
-
-	const editor = vscode.window.activeTextEditor;
-	const workPath = vscode.workspace.rootPath;
-	if (editor && workPath) {
-		const document = editor.document;
-		const filePath = document.fileName;
-		const uri = document.uri;
-		const fileName = filePath.split("\\").pop();
-		
-		let json: string;
-		
-		const reletivePath = filePath.replace(workPath, '');
-		const jsonOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
-				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
-				+ reletivePath
-				+ ' --json', 
-			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
-		).stdout;
-		const messageOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
-				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
-				+ reletivePath, 
-			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
-		).stdout;
-		const printString = messageOut.split("\n").filter((a: string) => a.includes("ERROR"))[0];
-		const result = processOutput(printString, jsonOut);
-		if (result.length > 0){
-			const location = result[0].range
-			let c: vscode.Command = {
-				command: 'extension.addConsoleLog',
-				title: printString,
-			};
-			let codeLens = new vscode.CodeLens(location, c);
-			return [codeLens];
+		let topOfDocument = new vscode.Range(0, 0, 0, 0);
+		const editor = vscode.window.activeTextEditor;
+		const workPath = vscode.workspace.rootPath;
+		if (editor && workPath) {
+			const document = editor.document;
+			const filePath = document.fileName;
+			const reletivePath = filePath.replace(workPath, '');
+			const jsonOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
+					+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
+					+ reletivePath
+					+ ' --json', 
+				{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
+			).stdout;
+			const messageOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
+					+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
+					+ reletivePath, 
+				{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
+			).stdout;
+			const printString = messageOut.split("\n").filter((a: string) => a.includes("ERROR"))[0];
+			const result = processOutput(printString, jsonOut);
+			if (result.length > 0){
+				const location = result[0].range;
+				let c: vscode.Command = {
+					command: 'extension.addConsoleLog',
+					title: printString,
+				};
+				let codeLens = new vscode.CodeLens(location, c);
+				return [codeLens];
+			}
 		}
+		return [];
 	}
-
-  
-	
-  
-  
-	return [];
-	}
-  }
+}
