@@ -1,13 +1,8 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import * as noInstanceJson from './no-instance.json';
+import { Semantics } from './semantics';
 
-import * as incompatiblilityJson from './incompatiblility.json';
-import * as IncompatibilityNumberJson from './Incompatibility-chooseNumber.json';
-import * as IncompatibilityStringJson from './Incompatibility-chooseString.json';
-import { start } from 'repl';
-import { kMaxLength } from 'buffer';
 const { spawnSync } = require('child_process')
 
 const CHECKINGTYPE = 'checkingType';
@@ -31,6 +26,29 @@ interface format{
 	contents: number
 }
 
+interface ErrorDetail{
+	fileName : String,
+    description : String,
+    lineNumber : Number,
+    columnNumber  : Number,
+    conflicts : [Conflict]
+}
+
+interface Conflict{
+    colour : String, 
+    label : String,
+    instanciatedType : String,
+    expectedType : String,
+    locations : [Location]
+}
+
+interface Location{
+	lineFrom : Number,
+    lineTo : Number,
+    columnFrom : Number,
+    columnTo : Number
+}
+
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -47,20 +65,11 @@ export function activate(context: vscode.ExtensionContext) {
 		scheme: 'file',
 	};
 
-	let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
-		docSelector,
-		new MyCodeLensProvider()
-	);
+	//let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
+	//	docSelector,
+	//	new MyCodeLensProvider()
+	//);
 	  
-	//context.subscriptions.push(codeLensProviderDisposable)
-
-	let runChameleon = vscode.commands.registerCommand('haskell-debugging.runChameleon', () => {
-		const editor = vscode.window.activeTextEditor;
-		const workPath = vscode.workspace.rootPath;
-		if (editor && workPath) {
-			getChemelionErrors(diagnosticsSet, editor.document);
-		}
-	});
 
 	let onSave = vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
 		getChemelionErrors(diagnosticsSet, document)
@@ -72,8 +81,46 @@ export function activate(context: vscode.ExtensionContext) {
 
 
 	context.subscriptions.push(onOpen);
-	context.subscriptions.push(onSave)
+	context.subscriptions.push(onSave);
+
+	context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(docSelector, new DocumentSemanticTokensProvider(), legend));
+
 }
+
+
+
+const tokenTypes = new Map<string, number>();
+const tokenModifiers = new Map<string, number>();
+
+const legend = (function () {
+	const tokenTypesLegend = [
+		'1', '2', '3', '4'
+	];
+	tokenTypesLegend.forEach((tokenType, index) => tokenTypes.set(tokenType, index));
+
+	const tokenModifiersLegend = [
+		'declaration', 'documentation'
+	];
+	tokenModifiersLegend.forEach((tokenModifier, index) => tokenModifiers.set(tokenModifier, index));
+
+	return new vscode.SemanticTokensLegend(tokenTypesLegend, tokenModifiersLegend);
+})();
+
+
+
+class DocumentSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
+	async provideDocumentSemanticTokens(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.SemanticTokens> {
+		const builder = new vscode.SemanticTokensBuilder();
+		builder.push(3, 0, 3, 0, 0);
+		builder.push(3, 10, 6, 0, 0);
+		console.log(builder.build())
+		return builder.build();
+	}
+}
+
+
+
+
 
 const getChemelionErrors = function(diognosticSet: vscode.DiagnosticCollection, document: vscode.TextDocument) {
 	
@@ -113,17 +160,20 @@ const getChemelionErrors = function(diognosticSet: vscode.DiagnosticCollection, 
 
 
 const processOutput = function(error: string, jsonString: string) : vscode.Diagnostic[] {
-	if (jsonString === '"'){
-		return []
+	//console.log(jsonString)
+	if (jsonString === ''){
+		//console.log("fuck")
+		return [];
 	}
 	const json : chameleonOutput[] = JSON.parse(jsonString);
-	console.log(jsonString.length)
+	//console.log(jsonString.length)
 	const errors = json.filter((message:chameleonOutput) => message.format.tag === "TextHL")
 	const diagnostics: vscode.Diagnostic[] = errors.map((message:chameleonOutput): vscode.Diagnostic =>{
 		const start = message.region.start;
 		const end = message.region.end;
 		return new vscode.Diagnostic(new vscode.Range(start[0] - 1, start[1] - 1, end[0] - 1, end[1] - 1), error);
 	});
+	console.log(diagnostics);
 	return diagnostics;
 };
 
@@ -165,3 +215,5 @@ class MyCodeLensProvider implements vscode.CodeLensProvider {
 		return [];
 	}
 }
+
+"https://cdn.mos.cms.futurecdn.net/gofvpedSqHBfoC3RKe559N.jpg"

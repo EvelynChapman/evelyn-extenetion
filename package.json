@@ -13,7 +13,8 @@
 		"onCommand:haskell-debugging.showHighlight",
 		"onCommand:haskell-debugging.startTypeQuestion",
 		"onCommand:haskell-debugging.runChameleon",
-		"onLanguage:haskell"
+		"onLanguage:haskell",
+		"onLanguage:semanticLanguage"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
@@ -29,6 +30,14 @@
 			{
 				"command": "haskell-debugging.runChameleon",
 				"title": "Run Chameleon"
+			}
+		],
+		"languages": [
+			{
+				"id": "haskell",
+				"extensions": [
+					".hs"
+				]
 			}
 		]
 	},
