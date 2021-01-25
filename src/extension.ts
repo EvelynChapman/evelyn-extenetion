@@ -1,11 +1,11 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { Semantics } from './semantics';
 
 const { spawnSync } = require('child_process')
 
 const CHECKINGTYPE = 'checkingType';
+const TEXTEDITOR = vscode.window.activeTextEditor ? vscode.window.activeTextEditor : false;
 const DOCUMENT = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document : false;
 
 interface region {
@@ -43,10 +43,10 @@ interface Conflict{
 }
 
 interface Location{
-	lineFrom : Number,
-    lineTo : Number,
-    columnFrom : Number,
-    columnTo : Number
+	lineFrom : number,
+    lineTo : number,
+    columnFrom : number,
+    columnTo : number
 }
 
 
@@ -73,21 +73,78 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let onSave = vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
 		getChemelionErrors(diagnosticsSet, document)
+		if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor)
 	});
 
 	let onOpen = vscode.workspace.onDidOpenTextDocument((document: vscode.TextDocument) => {
 		getChemelionErrors(diagnosticsSet, document)
 	});
 
+	
+
+
 
 	context.subscriptions.push(onOpen);
 	context.subscriptions.push(onSave);
 
-	context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(docSelector, new DocumentSemanticTokensProvider(), legend));
+	//context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(docSelector, new DocumentSemanticTokensProvider(), legend));
+}
 
+const ChemelionDecoration1 = vscode.window.createTextEditorDecorationType({
+	fontStyle: 'bold',
+	backgroundColor: '#3e90b6',
+	border: '2px solid white',
+	
+  })
+
+const ChemelionDecoration2 = vscode.window.createTextEditorDecorationType({
+backgroundColor: '#571643',
+border: '2px solid white',
+})
+
+export function activateDecotator(context: vscode.ExtensionContext) {
+	vscode.workspace.onWillSaveTextDocument(event => {
+	  const openEditor = vscode.window.visibleTextEditors.filter(
+		editor => editor.document.uri === event.document.uri
+	  )[0]
+	  decorate(openEditor)
+	})
+}
+
+let decorationsArchive: vscode.TextEditorDecorationType[] = []
+
+const locationToRange = function(loc: Location): vscode.Range{
+	 return new vscode.Range(loc.lineFrom, loc.columnFrom, loc.lineTo, loc.columnTo)
 }
 
 
+const decorate = function(editor: vscode.TextEditor){
+	let decorationsArray: vscode.DecorationOptions[] = []
+	let error: ErrorDetail
+	error.conflicts.forEach((conflict: Conflict) =>{
+		const decorationType = vscode.window.createTextEditorDecorationType({
+			backgroundColor: conflict.colour
+		})
+		decorationsArchive.push(decorationType)
+		const decorations = conflict.locations.map((loc:Location) : vscode.DecorationOptions  => {return {
+			range : locationToRange(loc),
+			hoverMessage : conflict.label + ", Exprected Type: " + conflict.expectedType + ", Instanciated Type:" + conflict.instanciatedType
+		}}
+		)
+		editor.setDecorations(decorationType, decorations)
+	}
+
+
+	)
+
+
+	const options1 = {range : new vscode.Range(3,0,3,3), hoverMessage: "message 1"}
+	const options2 = {range : new vscode.Range(3,10,3,16), hoverMessage: "message 2"}
+	editor.setDecorations(ChemelionDecoration1, [options1])
+	editor.setDecorations(ChemelionDecoration2, [options2])
+}
+
+const function makeDecorationOptions(error: ErrorDetail): vscode.DecorationOptions{}
 
 const tokenTypes = new Map<string, number>();
 const tokenModifiers = new Map<string, number>();
@@ -112,11 +169,13 @@ class DocumentSemanticTokensProvider implements vscode.DocumentSemanticTokensPro
 	async provideDocumentSemanticTokens(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.SemanticTokens> {
 		const builder = new vscode.SemanticTokensBuilder();
 		builder.push(3, 0, 3, 0, 0);
-		builder.push(3, 10, 6, 0, 0);
+		builder.push(3, 10, 6, 1, 0);
 		console.log(builder.build())
 		return builder.build();
 	}
 }
+
+
 
 
 
