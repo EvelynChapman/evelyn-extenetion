@@ -1,0 +1,48 @@
+ {
+     "fileName": "test.hs",
+     "description": "Something wrong with wow expression",
+     "line": 12,
+     "column": 0,
+     "conflicts": [
+         {
+             "highlightColor": "#643a55",
+             "label": "Error 1",
+             "instanciatedType": "a -> a",
+             "expectedType": "a -> [a]",
+             "locations": [
+                 {
+                     "lineFrom": 1,
+                     "lineTo": 1,
+                     "columnFrom": 0,
+                     "columnTo": 23
+                 },
+                 {
+                    "lineFrom": 2,
+                    "lineTo": 2,
+                    "columnFrom": 7,
+                    "columnTo": 18
+                 }
+             ]
+         },
+         {
+            "highlightColor": "#361456",
+            "label": "Error 2",
+            "instanciatedType": "a -> [[a]]",
+            "expectedType": "a -> [a]",
+            "locations": [
+                {
+                    "lineFrom": 2,
+                    "lineTo": 2,
+                    "columnFrom": 1,
+                    "columnTo": 5
+                },
+                {
+                   "lineFrom": 0,
+                   "lineTo": 0,
+                   "columnFrom": 9,
+                   "columnTo": 17
+                }
+            ]
+        }
+     ]
+ }

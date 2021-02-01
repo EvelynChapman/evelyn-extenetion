@@ -1,0 +1,48 @@
+ {
+     "fileName": "test.hs",
+     "description": "Something wrong with if expression",
+     "line": 0,
+     "column": 0,
+     "conflicts": [
+         {
+             "highlightColor": "#143a55",
+             "label": "Error 1",
+             "instanciatedType": "a -> a",
+             "expectedType": "a -> [a]",
+             "locations": [
+                 {
+                     "lineFrom": 1,
+                     "lineTo": 1,
+                     "columnFrom": 3,
+                     "columnTo": 10
+                 },
+                 {
+                    "lineFrom": 2,
+                    "lineTo": 2,
+                    "columnFrom": 0,
+                    "columnTo": 3
+                 }
+             ]
+         },
+         {
+            "highlightColor": "#561456",
+            "label": "Error 2",
+            "instanciatedType": "a -> [[a]]",
+            "expectedType": "a -> [a]",
+            "locations": [
+                {
+                    "lineFrom": 1,
+                    "lineTo": 1,
+                    "columnFrom": 12,
+                    "columnTo": 16
+                },
+                {
+                   "lineFrom": 3,
+                   "lineTo": 3,
+                   "columnFrom": 6,
+                   "columnTo": 10
+                }
+            ]
+        }
+     ]
+ }

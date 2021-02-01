@@ -1,0 +1,36 @@
+ {
+     "fileName": "Incompatibility.hs",
+     "description": "The type of \"whoIsRight\" can be either 'Bool -> String' or 'Num a => Bool -> a'",
+     "line": 1,
+     "column": 0,
+     "conflicts": [
+         {
+             "highlightColor": "#143a55",
+             "label": "inconstant return type instane 1",
+             "instanciatedType": "Bool -> [Char]",
+             "expectedType": "undefined",
+             "locations": [
+                 {
+                     "lineFrom": 3,
+                     "lineTo": 3,
+                     "columnFrom": 9,
+                     "columnTo": 19
+                 }
+             ]
+         },
+         {
+            "highlightColor": "#561456",
+            "label": "inconstant return type instane 2",
+            "instanciatedType": "Bool -> Int",
+            "expectedType": "undefined",
+            "locations": [
+                {
+                    "lineFrom": 4,
+                    "lineTo": 4,
+                    "columnFrom": 9,
+                    "columnTo": 11
+                }
+            ]
+        }
+     ]
+ }

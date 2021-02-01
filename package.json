@@ -13,6 +13,7 @@
 		"onCommand:haskell-debugging.showHighlight",
 		"onCommand:haskell-debugging.startTypeQuestion",
 		"onCommand:haskell-debugging.runChameleon",
+		"onCommand:haskell-debugging.clearChameleon",
 		"onLanguage:haskell",
 		"onLanguage:semanticLanguage"
 	],
@@ -20,16 +21,16 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "haskell-debugging.showHighlight",
-				"title": "Show Highlighting"
-			},
-			{
-				"command": "haskell-debugging.startTypeQuestion",
-				"title": "Type Question"
-			},
-			{
 				"command": "haskell-debugging.runChameleon",
 				"title": "Run Chameleon"
+			},
+			{
+				"command": "haskell-debugging.clearChameleon",
+				"title": "Clear Chameleon"
+			},
+			{
+				"command": "haskell-debugging.toggleChameleon",
+				"title": "Clear Chameleon"
 			}
 		],
 		"languages": [
@@ -39,7 +40,17 @@
 					".hs"
 				]
 			}
-		]
+		],
+		"menus": {
+			"editor/context": [{
+				"group": "Chameleon",
+				"command": "haskell-debugging.runChameleon"
+			},
+			{
+				"group": "Chameleon",
+				"command": "haskell-debugging.clearChameleon"
+		}]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run package",

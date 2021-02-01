@@ -1,7 +1,9 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
+import { randomInt } from 'crypto';
 import * as vscode from 'vscode';
-
+import * as Json1 from './testJson.json';
+import * as Json2 from './testJson2.json';
 const { spawnSync } = require('child_process')
 
 const CHECKINGTYPE = 'checkingType';
@@ -27,19 +29,19 @@ interface format{
 }
 
 interface ErrorDetail{
-	fileName : String,
-    description : String,
-    lineNumber : Number,
-    columnNumber  : Number,
-    conflicts : [Conflict]
+	fileName : string,
+    description : string,
+    line : number,
+    column  : number,
+    conflicts : Conflict[]
 }
 
 interface Conflict{
-    colour : String, 
-    label : String,
-    instanciatedType : String,
-    expectedType : String,
-    locations : [Location]
+    highlightColor : string, 
+    label : string,
+    instanciatedType : string,
+    expectedType : string,
+    locations : Location[]
 }
 
 interface Location{
@@ -60,32 +62,68 @@ export function activate(context: vscode.ExtensionContext) {
 	const diagnosticsSet = vscode.languages.createDiagnosticCollection("haskellErrors");
 	context.subscriptions.push(diagnosticsSet);
 
-	let docSelector = {
-		language: 'haskell',
-		scheme: 'file',
-	};
-
 	//let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
 	//	docSelector,
 	//	new MyCodeLensProvider()
 	//);
+
+	let runChameleon = vscode.commands.registerCommand('haskell-debugging.runChameleon', () => {
+		currentError = Json1
+		if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor, currentError);
+	});
+
+	let clearChameleon = vscode.commands.registerCommand('haskell-debugging.clearChameleon', () => {
+		clearDecorations()
+	});
+
+	let toggleChameleon = vscode.commands.registerCommand('haskell-debugging.toggleChameleon', () => {
+		if (decorationsArchive.length > 0){
+			clearDecorations()
+		}else{
+			currentError = Json2
+			if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor, currentError);
+		}
+	});
+
 	  
 
 	let onSave = vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
-		getChemelionErrors(diagnosticsSet, document)
-		if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor)
+		clearDecorations()
+		currentError = Json2
+		getChemelionErrors(diagnosticsSet, document);
+		console.log("document save")
+		if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor, currentError);
 	});
 
-	let onOpen = vscode.workspace.onDidOpenTextDocument((document: vscode.TextDocument) => {
-		getChemelionErrors(diagnosticsSet, document)
+	let onSwap = vscode.window.onDidChangeActiveTextEditor((editor: vscode.TextEditor | undefined) => {
+		clearDecorations()
+		currentError = Json1
+		
+		console.log("swap document")
+		if (editor) decorate(editor, Json1);
 	});
 
-	
+	let docSelector = {
+		language: 'haskell',
+		scheme: 'file',
+	  }
+
+	let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
+		docSelector,
+		new CodeLensProvider()
+	)
+	  
+	context.subscriptions.push(codeLensProviderDisposable)
 
 
 
-	context.subscriptions.push(onOpen);
 	context.subscriptions.push(onSave);
+	
+	context.subscriptions.push(onSwap);
+	context.subscriptions.push(runChameleon);
+	context.subscriptions.push(clearChameleon);
+	context.subscriptions.push(toggleChameleon);
+
 
 	//context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(docSelector, new DocumentSemanticTokensProvider(), legend));
 }
@@ -95,56 +133,89 @@ const ChemelionDecoration1 = vscode.window.createTextEditorDecorationType({
 	backgroundColor: '#3e90b6',
 	border: '2px solid white',
 	
-  })
+  });
 
 const ChemelionDecoration2 = vscode.window.createTextEditorDecorationType({
 backgroundColor: '#571643',
 border: '2px solid white',
-})
+});
 
 export function activateDecotator(context: vscode.ExtensionContext) {
 	vscode.workspace.onWillSaveTextDocument(event => {
 	  const openEditor = vscode.window.visibleTextEditors.filter(
 		editor => editor.document.uri === event.document.uri
-	  )[0]
-	  decorate(openEditor)
-	})
+	  )[0];
+	  decorate(openEditor);
+	});
 }
 
-let decorationsArchive: vscode.TextEditorDecorationType[] = []
+let decorationsArchive: vscode.TextEditorDecorationType[] = [];
+let currentError: ErrorDetail | null;
+
+const clearDecorations = function(){
+	currentError = null;
+	//decorationsArchive.forEach((dec: vscode.TextEditorDecorationType) => dec.dispose())
+	decorationsArchive = decorationsArchive.reduce((acc, dec: vscode.TextEditorDecorationType) => {
+		dec.dispose();
+		return [];
+	}, []);
+};
 
 const locationToRange = function(loc: Location): vscode.Range{
 	 return new vscode.Range(loc.lineFrom, loc.columnFrom, loc.lineTo, loc.columnTo)
-}
+};
 
 
-const decorate = function(editor: vscode.TextEditor){
-	let decorationsArray: vscode.DecorationOptions[] = []
-	let error: ErrorDetail
+const decorate = function(editor: vscode.TextEditor, error: ErrorDetail){
+	//console.log("FICK")
+	//clearDecorations();
+	let decorationsArray: vscode.DecorationOptions[] = [];
+	//console.log(error)
+	//let snippet = new vscode.SnippetString('console.log($1);\n')
+
+	//editor.insertSnippet(snippet, new vscode.Range(error.line, error.column, error.line, error.column))
+
+	const overallType = vscode.window.createTextEditorDecorationType({
+		border: 'dotted dotted solid solid' ,
+		isWholeLine: true
+	});
+	const startRow = error.line
+	let endRow = error.line
+	let endCol = 0
 	error.conflicts.forEach((conflict: Conflict) =>{
 		const decorationType = vscode.window.createTextEditorDecorationType({
-			backgroundColor: conflict.colour
-		})
-		decorationsArchive.push(decorationType)
-		const decorations = conflict.locations.map((loc:Location) : vscode.DecorationOptions  => {return {
-			range : locationToRange(loc),
-			hoverMessage : conflict.label + ", Exprected Type: " + conflict.expectedType + ", Instanciated Type:" + conflict.instanciatedType
-		}}
-		)
-		editor.setDecorations(decorationType, decorations)
-	}
+			backgroundColor: conflict.highlightColor
+		});
 
+		decorationsArchive.push(decorationType);
+		const string =   conflict.label 
+		const types = "Exprected Type :: " + conflict.expectedType + "\nInstanciated Type :: " + conflict.instanciatedType;
+		let message = new vscode.MarkdownString().appendCodeblock(string, "txt").appendCodeblock(types, "haskell")
+		message.isTrusted = true;
+		let decorations = conflict.locations.map((loc:Location) : vscode.DecorationOptions  => {
+			if (loc.lineTo > endRow) endRow = loc.lineTo;
+			return {
+				range : locationToRange(loc),
+				hoverMessage : message
+			}
+		}
+		);
+		editor.setDecorations(decorationType, decorations);
+	})
+	decorationsArchive.push(overallType)
+	editor.setDecorations(overallType, [
+		{
+			range : new vscode.Range(startRow, 0, endRow, 100),
+			hoverMessage : new vscode.MarkdownString().appendText("--- Chameleon Error --- \n" + error.description)
+		}
+	])
+		
 
-	)
+	
 
-
-	const options1 = {range : new vscode.Range(3,0,3,3), hoverMessage: "message 1"}
-	const options2 = {range : new vscode.Range(3,10,3,16), hoverMessage: "message 2"}
-	editor.setDecorations(ChemelionDecoration1, [options1])
-	editor.setDecorations(ChemelionDecoration2, [options2])
 }
 
-const function makeDecorationOptions(error: ErrorDetail): vscode.DecorationOptions{}
+
 
 const tokenTypes = new Map<string, number>();
 const tokenModifiers = new Map<string, number>();
@@ -164,7 +235,6 @@ const legend = (function () {
 })();
 
 
-
 class DocumentSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
 	async provideDocumentSemanticTokens(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.SemanticTokens> {
 		const builder = new vscode.SemanticTokensBuilder();
@@ -174,11 +244,6 @@ class DocumentSemanticTokensProvider implements vscode.DocumentSemanticTokensPro
 		return builder.build();
 	}
 }
-
-
-
-
-
 
 
 const getChemelionErrors = function(diognosticSet: vscode.DiagnosticCollection, document: vscode.TextDocument) {
@@ -273,6 +338,33 @@ class MyCodeLensProvider implements vscode.CodeLensProvider {
 		}
 		return [];
 	}
+}
+
+export class CodeLensProvider implements vscode.CodeLensProvider {
+
+	public static readonly providedCodeActionKinds = [
+		vscode.CodeActionKind.QuickFix
+	];
+
+	provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[]{
+		console.log(currentError)
+		console.log("yeet")
+		if (!currentError) {
+			console.log("no erroe")
+			return [];
+		}
+		const range = new vscode.Range(currentError.line, currentError.column, currentError.line, currentError.column);
+		const c: vscode.Command = {
+			command: 'haskell-debugging.toggleChameleon',
+			tooltip: 'Clear Chameleon Errors',
+			title: currentError.description + " (Click to toggle)"
+		} ;
+		let codeLens = new vscode.CodeLens(range, c);
+		console.log(codeLens)
+		console.log("codelens")
+		return [codeLens];
+	}
+
 }
 
 "https://cdn.mos.cms.futurecdn.net/gofvpedSqHBfoC3RKe559N.jpg"
