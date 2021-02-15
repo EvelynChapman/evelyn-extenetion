@@ -33,13 +33,13 @@ interface Location{
     columnTo : number
 }
 
-let chameleonRunning = false;
+let chameleonRunning = true;
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
 
-	vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', false);
+	vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', true);
 	let annotations: vscode.TextEditorDecorationType[];
 	let specialAnno: vscode.TextEditorDecorationType;
 
@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
 		chameleonRunning = true;
 		if ( vscode.window.activeTextEditor &&vscode.window.activeTextEditor.document){
 			//currentError = getChemelionErrors(vscode.window.activeTextEditor.document, context.extensionUri.fsPath)
-			decorate(vscode.window.activeTextEditor, currentError)
+			decorate(vscode.window.activeTextEditor, currentError);
 		}
 	});
 
@@ -73,31 +73,16 @@ export function activate(context: vscode.ExtensionContext) {
 	//	new MyCodeLensProvider()
 	//);
 
-	let runChameleon = vscode.commands.registerCommand('haskell-debugging.runChameleon', () => {
-		//currentError = Json1;
-		if (vscode.window.activeTextEditor) {decorate(vscode.window.activeTextEditor, currentError);}
-	});
-
-	let clearChameleon = vscode.commands.registerCommand('haskell-debugging.clearChameleon', () => {
-		clearDecorations();
-	});
-
-	let toggleChameleon = vscode.commands.registerCommand('haskell-debugging.toggleChameleon', () => {
-		if (decorationsArchive.length > 0){
-			clearDecorations();
-		}else{
-			//currentError = Json2;
-			if (vscode.window.activeTextEditor) {decorate(vscode.window.activeTextEditor, currentError);}
-		}
-	});
-
 	  
 
 	let onSave = vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
 		clearDecorations();
+		console.log("FUCK")
 		if (document){
 			currentError = getChemelionErrors(document, context.extensionUri.fsPath);
+		
 		}
+		console.log(currentError)
 		if (vscode.window.activeTextEditor && chameleonRunning) {decorate(vscode.window.activeTextEditor, currentError);}
 	});
 
@@ -123,12 +108,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 
 
-	context.subscriptions.push(onSave, viewDiagnosis, hideDiagnosis);
+	context.subscriptions.push(onSwap, onSave, viewDiagnosis, hideDiagnosis);
 	
-	context.subscriptions.push(onSwap);
-	context.subscriptions.push(runChameleon);
-	context.subscriptions.push(clearChameleon);
-	context.subscriptions.push(toggleChameleon);
 
 
 	//context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(docSelector, new DocumentSemanticTokensProvider(), legend));
