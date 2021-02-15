@@ -14,6 +14,8 @@
 		"onCommand:haskell-debugging.startTypeQuestion",
 		"onCommand:haskell-debugging.runChameleon",
 		"onCommand:haskell-debugging.clearChameleon",
+		"onCommand:haskell-debugging.viewDiagnosis",
+		"onCommand:haskell-debugging.hideDiagnosis",
 		"onLanguage:haskell",
 		"onLanguage:semanticLanguage"
 	],
@@ -31,7 +33,26 @@
 			{
 				"command": "haskell-debugging.toggleChameleon",
 				"title": "Clear Chameleon"
+			},
+			{
+				"command": "haskell-debugging.viewDiagnosis",
+				"category": "Chameleon",
+				"title": "View diagnosis",
+				"icon": {
+					"dark": "assets/reptile-yellow.svg",
+					"light": "assets/reptile-yellow.svg"
+				}
+			},
+			{
+				"command": "haskell-debugging.hideDiagnosis",
+				"category": "Chameleon",
+				"title": "Hide diagnosis",
+				"icon": {
+					"dark": "assets/reptile-green.svg",
+					"light": "assets/reptile-green.svg"
+				}
 			}
+
 		],
 		"languages": [
 			{
@@ -49,7 +70,20 @@
 			{
 				"group": "Chameleon",
 				"command": "haskell-debugging.clearChameleon"
-		}]
+		}],
+		"editor/title": [
+			{
+				"command": "haskell-debugging.viewDiagnosis",
+				"group": "1_run",
+				"when": "!chameleon:diagnosisVisibility"
+			},
+			{
+				"command": "haskell-debugging.hideDiagnosis",
+				"group": "1_run",
+				"when": "chameleon:diagnosisVisibility"
+			}
+
+		  ]
 		}
 	},
 	"scripts": {

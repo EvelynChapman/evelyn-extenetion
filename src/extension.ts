@@ -4,40 +4,22 @@ import { randomInt } from 'crypto';
 import * as vscode from 'vscode';
 import * as Json1 from './testJson.json';
 import * as Json2 from './testJson2.json';
-const { spawnSync } = require('child_process')
+const { spawnSync } = require('child_process');
 
 const CHECKINGTYPE = 'checkingType';
 const TEXTEDITOR = vscode.window.activeTextEditor ? vscode.window.activeTextEditor : false;
 const DOCUMENT = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document : false;
 
-interface region {
-	tag: string
-	start: number[]
-	end: number[]
-}
-
-interface chameleonOutput{
-	test: string
-	format: format
-	region: region
-
-}
-
-interface format{
-	tag: string
-	contents: number
-}
-
 interface ErrorDetail{
 	fileName : string,
     description : string,
-    line : number,
-    column  : number,
+    lineNumber : number,
+    columnNumber  : number,
     conflicts : Conflict[]
 }
 
 interface Conflict{
-    highlightColor : string, 
+    colour : string, 
     label : string,
     instanciatedType : string,
     expectedType : string,
@@ -51,10 +33,34 @@ interface Location{
     columnTo : number
 }
 
-
+let chameleonRunning = false;
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+
+
+	vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', false);
+	let annotations: vscode.TextEditorDecorationType[];
+	let specialAnno: vscode.TextEditorDecorationType;
+
+
+	let viewDiagnosis = vscode.commands.registerCommand('haskell-debugging.viewDiagnosis', () => {
+		vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', true);
+		chameleonRunning = true;
+		if ( vscode.window.activeTextEditor &&vscode.window.activeTextEditor.document){
+			//currentError = getChemelionErrors(vscode.window.activeTextEditor.document, context.extensionUri.fsPath)
+			decorate(vscode.window.activeTextEditor, currentError)
+		}
+	});
+
+	let hideDiagnosis = vscode.commands.registerCommand('haskell-debugging.hideDiagnosis', () => {
+		vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', false);
+		chameleonRunning = false;
+		clearDecorations();
+	});
+
+
+
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
@@ -68,56 +74,56 @@ export function activate(context: vscode.ExtensionContext) {
 	//);
 
 	let runChameleon = vscode.commands.registerCommand('haskell-debugging.runChameleon', () => {
-		currentError = Json1
-		if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor, currentError);
+		//currentError = Json1;
+		if (vscode.window.activeTextEditor) {decorate(vscode.window.activeTextEditor, currentError);}
 	});
 
 	let clearChameleon = vscode.commands.registerCommand('haskell-debugging.clearChameleon', () => {
-		clearDecorations()
+		clearDecorations();
 	});
 
 	let toggleChameleon = vscode.commands.registerCommand('haskell-debugging.toggleChameleon', () => {
 		if (decorationsArchive.length > 0){
-			clearDecorations()
+			clearDecorations();
 		}else{
-			currentError = Json2
-			if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor, currentError);
+			//currentError = Json2;
+			if (vscode.window.activeTextEditor) {decorate(vscode.window.activeTextEditor, currentError);}
 		}
 	});
 
 	  
 
 	let onSave = vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
-		clearDecorations()
-		currentError = Json2
-		getChemelionErrors(diagnosticsSet, document);
-		console.log("document save")
-		if (vscode.window.activeTextEditor) decorate(vscode.window.activeTextEditor, currentError);
+		clearDecorations();
+		if (document){
+			currentError = getChemelionErrors(document, context.extensionUri.fsPath);
+		}
+		if (vscode.window.activeTextEditor && chameleonRunning) {decorate(vscode.window.activeTextEditor, currentError);}
 	});
 
 	let onSwap = vscode.window.onDidChangeActiveTextEditor((editor: vscode.TextEditor | undefined) => {
-		clearDecorations()
-		currentError = Json1
-		
-		console.log("swap document")
-		if (editor) decorate(editor, Json1);
+		clearDecorations();
+		if (editor?.document){
+			currentError = getChemelionErrors(editor.document, context.extensionUri.fsPath);
+		}
+		if (editor && chameleonRunning) {decorate(editor, currentError);}
 	});
 
 	let docSelector = {
 		language: 'haskell',
 		scheme: 'file',
-	  }
+	};
 
 	let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
 		docSelector,
 		new CodeLensProvider()
-	)
+	);
 	  
-	context.subscriptions.push(codeLensProviderDisposable)
+	context.subscriptions.push(codeLensProviderDisposable);
 
 
 
-	context.subscriptions.push(onSave);
+	context.subscriptions.push(onSave, viewDiagnosis, hideDiagnosis);
 	
 	context.subscriptions.push(onSwap);
 	context.subscriptions.push(runChameleon);
@@ -128,32 +134,10 @@ export function activate(context: vscode.ExtensionContext) {
 	//context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(docSelector, new DocumentSemanticTokensProvider(), legend));
 }
 
-const ChemelionDecoration1 = vscode.window.createTextEditorDecorationType({
-	fontStyle: 'bold',
-	backgroundColor: '#3e90b6',
-	border: '2px solid white',
-	
-  });
-
-const ChemelionDecoration2 = vscode.window.createTextEditorDecorationType({
-backgroundColor: '#571643',
-border: '2px solid white',
-});
-
-export function activateDecotator(context: vscode.ExtensionContext) {
-	vscode.workspace.onWillSaveTextDocument(event => {
-	  const openEditor = vscode.window.visibleTextEditors.filter(
-		editor => editor.document.uri === event.document.uri
-	  )[0];
-	  decorate(openEditor);
-	});
-}
-
 let decorationsArchive: vscode.TextEditorDecorationType[] = [];
-let currentError: ErrorDetail | null;
+let currentError: ErrorDetail | undefined;
 
 const clearDecorations = function(){
-	currentError = null;
 	//decorationsArchive.forEach((dec: vscode.TextEditorDecorationType) => dec.dispose())
 	decorationsArchive = decorationsArchive.reduce((acc, dec: vscode.TextEditorDecorationType) => {
 		dec.dispose();
@@ -162,184 +146,134 @@ const clearDecorations = function(){
 };
 
 const locationToRange = function(loc: Location): vscode.Range{
-	 return new vscode.Range(loc.lineFrom, loc.columnFrom, loc.lineTo, loc.columnTo)
+	 return new vscode.Range(loc.lineFrom, loc.columnFrom, loc.lineTo, loc.columnTo);
 };
 
+const subRange = function (document:vscode.TextDocument, range: vscode.Range): vscode.Range[] {
+	let start = document.offsetAt(range.start);
+	let end = document.offsetAt(range.end);
+	let subranges: vscode.Range[] = [];
+	for (let i = start; i < end; i += 1) {
+		let curr = document.positionAt(i);
+		let next = document.positionAt(i + 1);
+		subranges = [...subranges, new vscode.Range(curr, next)]
+	}
+	return subranges
+}
 
-const decorate = function(editor: vscode.TextEditor, error: ErrorDetail){
-	//console.log("FICK")
-	//clearDecorations();
-	let decorationsArray: vscode.DecorationOptions[] = [];
-	//console.log(error)
-	//let snippet = new vscode.SnippetString('console.log($1);\n')
+const joinRange = function (document:vscode.TextDocument, subranges: vscode.Range[]): vscode.Range {
+	let offsets = subranges
+		.flatMap(subrange => [document.offsetAt(subrange.start), document.offsetAt(subrange.end)])
 
-	//editor.insertSnippet(snippet, new vscode.Range(error.line, error.column, error.line, error.column))
+	let min:number = offsets.reduce((a, b)=> a > b ? b : a ,Infinity);
+	let max:number = offsets.reduce((a, b)=> a > b ? a : b ,0);;
+	return new vscode.Range(document.positionAt(min), document.positionAt(max))
+}
+
+const isTokenSeperator = function (s: string) {
+	console.log(s)
+	return /\s/g.test(s);
+}
+const cleanUpWhiteTokenSeperator = function (editor:vscode.TextEditor, range: vscode.Range): vscode.Range {
+	let document = editor.document
+	let subranges = subRange(document, range)
+		.filter(srange => !isTokenSeperator(editor.document.getText(srange)))
+	let joind = joinRange(document, subranges)
+	console.log(joind)
+	return joind
+}
+
+const decorate = function(editor: vscode.TextEditor, error: ErrorDetail | undefined){
+	console.log("yrrt");
+	if (error === undefined) {
+		console.log("KILLED");
+		return undefined;
+	}
 
 	const overallType = vscode.window.createTextEditorDecorationType({
 		border: 'dotted dotted solid solid' ,
 		isWholeLine: true
 	});
-	const startRow = error.line
-	let endRow = error.line
-	let endCol = 0
+	const startRow = error.lineNumber;
+	let endRow = error.lineNumber;
+	let endCol = 0;
 	error.conflicts.forEach((conflict: Conflict) =>{
 		const decorationType = vscode.window.createTextEditorDecorationType({
-			backgroundColor: conflict.highlightColor
+			backgroundColor: conflict.colour
 		});
 
 		decorationsArchive.push(decorationType);
-		const string =   conflict.label 
+		const string =   conflict.label ;
 		const types = "Exprected Type :: " + conflict.expectedType + "\nInstanciated Type :: " + conflict.instanciatedType;
-		let message = new vscode.MarkdownString().appendCodeblock(string, "txt").appendCodeblock(types, "haskell")
+		let message = new vscode.MarkdownString().appendCodeblock(string, "txt").appendCodeblock(types, "haskell");
 		message.isTrusted = true;
 		let decorations = conflict.locations.map((loc:Location) : vscode.DecorationOptions  => {
-			if (loc.lineTo > endRow) endRow = loc.lineTo;
+			if (loc.lineTo > endRow) {endRow = loc.lineTo;}
 			return {
-				range : locationToRange(loc),
+				range : cleanUpWhiteTokenSeperator(editor, locationToRange(loc)),
 				hoverMessage : message
-			}
+			};
 		}
 		);
 		editor.setDecorations(decorationType, decorations);
-	})
-	decorationsArchive.push(overallType)
+	});
+	decorationsArchive.push(overallType);
 	editor.setDecorations(overallType, [
 		{
 			range : new vscode.Range(startRow, 0, endRow, 100),
 			hoverMessage : new vscode.MarkdownString().appendText("--- Chameleon Error --- \n" + error.description)
 		}
-	])
+	]);
 		
 
 	
 
-}
+};
 
 
 
 const tokenTypes = new Map<string, number>();
 const tokenModifiers = new Map<string, number>();
 
-const legend = (function () {
-	const tokenTypesLegend = [
-		'1', '2', '3', '4'
-	];
-	tokenTypesLegend.forEach((tokenType, index) => tokenTypes.set(tokenType, index));
+const getChemelionErrors = function (document: vscode.TextDocument, extentionPath: string): ErrorDetail | undefined{
+	const workPaths = vscode.workspace.workspaceFolders;
+	if (workPaths?.length) {
+		const workPath = workPaths[0].uri.fsPath;
+		const filePath = document.uri.path;
+		let fileName: string;
+		if (document.uri.scheme === "file") {
+			fileName = filePath
+				.split('/')
+				.reduce((accu, curr, currIn, arr) => currIn === arr.length - 1 ? accu + curr : accu, "");
 
-	const tokenModifiersLegend = [
-		'declaration', 'documentation'
-	];
-	tokenModifiersLegend.forEach((tokenModifier, index) => tokenModifiers.set(tokenModifier, index));
-
-	return new vscode.SemanticTokensLegend(tokenTypesLegend, tokenModifiersLegend);
-})();
-
-
-class DocumentSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
-	async provideDocumentSemanticTokens(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.SemanticTokens> {
-		const builder = new vscode.SemanticTokensBuilder();
-		builder.push(3, 0, 3, 0, 0);
-		builder.push(3, 10, 6, 1, 0);
-		console.log(builder.build())
-		return builder.build();
+		} else if (document.uri.scheme === "git") {
+			fileName = filePath
+				.split('/')
+				.reduce((accu, curr, currIn, arr) => currIn === arr.length - 1 ? accu + curr : accu, "")
+				.split('.')
+				.reduce((accu: string[], curr, currIn, arr) => currIn === arr.length - 1 ? accu : [...accu, curr], [])
+				.join('.');
+		} else {
+			fileName = "none";
+		}
+		//console.log(`${extentionPath}\\bin\\chameleon.exe`+ ` --lib=${extentionPath}\\bin `+ fileName);
+		const chameleonProcess = spawnSync(
+			`${extentionPath}\\bin\\chameleon.exe`
+			+ ` --lib=${extentionPath}\\bin `
+			+ fileName,
+			{ shell: "powershell.exe", cwd: workPath, encoding: 'utf8' }
+		);
+		//console.log(chameleonProcess.stdout);
+		if (chameleonProcess.stdout === 'InfFailureUConsUnmatched'){
+			return undefined;
+		}
+		let errors: ErrorDetail = JSON.parse(chameleonProcess.stdout)[0];
+		return errors;
 	}
-}
-
-
-const getChemelionErrors = function(diognosticSet: vscode.DiagnosticCollection, document: vscode.TextDocument) {
-	
-	const workPath = vscode.workspace.rootPath;
-	if(workPath){
-		const filePath = document.fileName;
-		const uri = document.uri;
-		const fileName = filePath.split("\\").pop();
-		
-		let json: string;
-		
-		const reletivePath = filePath.replace(workPath, '');
-		const jsonOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
-				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
-				+ reletivePath
-				+ ' --json', 
-			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
-		).stdout;
-		const messageOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
-				+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
-				+ reletivePath, 
-			{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
-		).stdout;
-		
-
-		const printString = messageOut.split("\n").filter((a: string) => a.includes("ERROR"))[0];
-		
-		const diagnostics = processOutput(printString, jsonOut);
-		
-		//console.log(diagnostics)
-		diognosticSet.set(uri, diagnostics);
-	}
-};
-
-
-
-
-
-const processOutput = function(error: string, jsonString: string) : vscode.Diagnostic[] {
-	//console.log(jsonString)
-	if (jsonString === ''){
-		//console.log("fuck")
-		return [];
-	}
-	const json : chameleonOutput[] = JSON.parse(jsonString);
-	//console.log(jsonString.length)
-	const errors = json.filter((message:chameleonOutput) => message.format.tag === "TextHL")
-	const diagnostics: vscode.Diagnostic[] = errors.map((message:chameleonOutput): vscode.Diagnostic =>{
-		const start = message.region.start;
-		const end = message.region.end;
-		return new vscode.Diagnostic(new vscode.Range(start[0] - 1, start[1] - 1, end[0] - 1, end[1] - 1), error);
-	});
-	console.log(diagnostics);
-	return diagnostics;
 };
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
-
-class MyCodeLensProvider implements vscode.CodeLensProvider {
-	async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
-		let topOfDocument = new vscode.Range(0, 0, 0, 0);
-		const editor = vscode.window.activeTextEditor;
-		const workPath = vscode.workspace.rootPath;
-		if (editor && workPath) {
-			const document = editor.document;
-			const filePath = document.fileName;
-			const reletivePath = filePath.replace(workPath, '');
-			const jsonOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
-					+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
-					+ reletivePath
-					+ ' --json', 
-				{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
-			).stdout;
-			const messageOut = spawnSync('C:\\Users\\Cody\\Documents\\GitHub\\chameleon\\.stack-work\\install\\1afa3193\\bin\\chameleon.exe'
-					+ ' --lib=C:\\Users\\Cody\\Documents\\GitHub\\chameleon ' 
-					+ reletivePath, 
-				{shell: "powershell.exe", cwd: workPath, encoding : 'utf8' }	
-			).stdout;
-			const printString = messageOut.split("\n").filter((a: string) => a.includes("ERROR"))[0];
-			const result = processOutput(printString, jsonOut);
-			if (result.length > 0){
-				const location = result[0].range;
-				let c: vscode.Command = {
-					command: 'extension.addConsoleLog',
-					title: printString,
-				};
-				let codeLens = new vscode.CodeLens(location, c);
-				return [codeLens];
-			}
-		}
-		return [];
-	}
-}
-
 export class CodeLensProvider implements vscode.CodeLensProvider {
 
 	public static readonly providedCodeActionKinds = [
@@ -347,24 +281,24 @@ export class CodeLensProvider implements vscode.CodeLensProvider {
 	];
 
 	provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[]{
-		console.log(currentError)
-		console.log("yeet")
+		//console.log(currentError)
+		//console.log("yeet")
 		if (!currentError) {
-			console.log("no erroe")
+			//console.log("no erroe")
 			return [];
 		}
-		const range = new vscode.Range(currentError.line, currentError.column, currentError.line, currentError.column);
+		const range = new vscode.Range(currentError.lineNumber, currentError.columnNumber, currentError.lineNumber, currentError.columnNumber);
 		const c: vscode.Command = {
 			command: 'haskell-debugging.toggleChameleon',
 			tooltip: 'Clear Chameleon Errors',
 			title: currentError.description + " (Click to toggle)"
 		} ;
 		let codeLens = new vscode.CodeLens(range, c);
-		console.log(codeLens)
-		console.log("codelens")
+		//console.log(codeLens)
+		//console.log("codelens")
 		return [codeLens];
 	}
 
 }
 
-"https://cdn.mos.cms.futurecdn.net/gofvpedSqHBfoC3RKe559N.jpg"
+"https://cdn.mos.cms.futurecdn.net/gofvpedSqHBfoC3RKe559N.jpg";
