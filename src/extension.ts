@@ -33,26 +33,26 @@ interface Location{
     columnTo : number
 }
 
-let chameleonRunning = true;
+let chameleonRunning = false;
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
-
-	vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', true);
+	//activates toggle buttion in vscode api
+	vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', false);
 	let annotations: vscode.TextEditorDecorationType[];
 	let specialAnno: vscode.TextEditorDecorationType;
 
-
+	//shows and runs chemelion
 	let viewDiagnosis = vscode.commands.registerCommand('haskell-debugging.viewDiagnosis', () => {
 		vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', true);
 		chameleonRunning = true;
 		if ( vscode.window.activeTextEditor &&vscode.window.activeTextEditor.document){
-			//currentError = getChemelionErrors(vscode.window.activeTextEditor.document, context.extensionUri.fsPath)
+			currentError = getChemelionErrors(vscode.window.activeTextEditor.document, context.extensionUri.fsPath)
 			decorate(vscode.window.activeTextEditor, currentError);
 		}
 	});
-
+	//hides chemelion
 	let hideDiagnosis = vscode.commands.registerCommand('haskell-debugging.hideDiagnosis', () => {
 		vscode.commands.executeCommand('setContext', 'chameleon:diagnosisVisibility', false);
 		chameleonRunning = false;
@@ -60,31 +60,18 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 
-
-
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-
-	const diagnosticsSet = vscode.languages.createDiagnosticCollection("haskellErrors");
-	context.subscriptions.push(diagnosticsSet);
-
-	//let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
-	//	docSelector,
-	//	new MyCodeLensProvider()
-	//);
-
-	  
+	//updates chemelion when window is saved
 
 	let onSave = vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
 		clearDecorations();
-		console.log("FUCK")
 		if (document){
 			currentError = getChemelionErrors(document, context.extensionUri.fsPath);
 		
 		}
-		console.log(currentError)
 		if (vscode.window.activeTextEditor && chameleonRunning) {decorate(vscode.window.activeTextEditor, currentError);}
 	});
+
+	//updates chemelion when window is swaped
 
 	let onSwap = vscode.window.onDidChangeActiveTextEditor((editor: vscode.TextEditor | undefined) => {
 		clearDecorations();
@@ -94,20 +81,8 @@ export function activate(context: vscode.ExtensionContext) {
 		if (editor && chameleonRunning) {decorate(editor, currentError);}
 	});
 
-	let docSelector = {
-		language: 'haskell',
-		scheme: 'file',
-	};
 
-	let codeLensProviderDisposable = vscode.languages.registerCodeLensProvider(
-		docSelector,
-		new CodeLensProvider()
-	);
-	  
-	context.subscriptions.push(codeLensProviderDisposable);
-
-
-
+	//starts watching all extention commands
 	context.subscriptions.push(onSwap, onSave, viewDiagnosis, hideDiagnosis);
 	
 
@@ -118,6 +93,8 @@ export function activate(context: vscode.ExtensionContext) {
 let decorationsArchive: vscode.TextEditorDecorationType[] = [];
 let currentError: ErrorDetail | undefined;
 
+//clears the current actave decoration
+
 const clearDecorations = function(){
 	//decorationsArchive.forEach((dec: vscode.TextEditorDecorationType) => dec.dispose())
 	decorationsArchive = decorationsArchive.reduce((acc, dec: vscode.TextEditorDecorationType) => {
@@ -126,6 +103,7 @@ const clearDecorations = function(){
 	}, []);
 };
 
+//tansfers the imported location data structure to the inbuilt range one
 const locationToRange = function(loc: Location): vscode.Range{
 	 return new vscode.Range(loc.lineFrom, loc.columnFrom, loc.lineTo, loc.columnTo);
 };
@@ -137,10 +115,10 @@ const subRange = function (document:vscode.TextDocument, range: vscode.Range): v
 	for (let i = start; i < end; i += 1) {
 		let curr = document.positionAt(i);
 		let next = document.positionAt(i + 1);
-		subranges = [...subranges, new vscode.Range(curr, next)]
+		subranges = [...subranges, new vscode.Range(curr, next)];
 	}
-	return subranges
-}
+	return subranges;
+};
 
 const joinRange = function (document:vscode.TextDocument, subranges: vscode.Range[]): vscode.Range {
 	let offsets = subranges
@@ -149,25 +127,21 @@ const joinRange = function (document:vscode.TextDocument, subranges: vscode.Rang
 	let min:number = offsets.reduce((a, b)=> a > b ? b : a ,Infinity);
 	let max:number = offsets.reduce((a, b)=> a > b ? a : b ,0);;
 	return new vscode.Range(document.positionAt(min), document.positionAt(max))
-}
+};
 
 const isTokenSeperator = function (s: string) {
-	console.log(s)
 	return /\s/g.test(s);
-}
+};
 const cleanUpWhiteTokenSeperator = function (editor:vscode.TextEditor, range: vscode.Range): vscode.Range {
-	let document = editor.document
+	let document = editor.document;
 	let subranges = subRange(document, range)
-		.filter(srange => !isTokenSeperator(editor.document.getText(srange)))
-	let joind = joinRange(document, subranges)
-	console.log(joind)
-	return joind
-}
+		.filter(srange => !isTokenSeperator(editor.document.getText(srange)));
+	let joind = joinRange(document, subranges);
+	return joind;
+};
 
 const decorate = function(editor: vscode.TextEditor, error: ErrorDetail | undefined){
-	console.log("yrrt");
 	if (error === undefined) {
-		console.log("KILLED");
 		return undefined;
 	}
 
@@ -212,10 +186,6 @@ const decorate = function(editor: vscode.TextEditor, error: ErrorDetail | undefi
 };
 
 
-
-const tokenTypes = new Map<string, number>();
-const tokenModifiers = new Map<string, number>();
-
 const getChemelionErrors = function (document: vscode.TextDocument, extentionPath: string): ErrorDetail | undefined{
 	const workPaths = vscode.workspace.workspaceFolders;
 	if (workPaths?.length) {
@@ -237,14 +207,12 @@ const getChemelionErrors = function (document: vscode.TextDocument, extentionPat
 		} else {
 			fileName = "none";
 		}
-		//console.log(`${extentionPath}\\bin\\chameleon.exe`+ ` --lib=${extentionPath}\\bin `+ fileName);
 		const chameleonProcess = spawnSync(
 			`${extentionPath}\\bin\\chameleon.exe`
 			+ ` --lib=${extentionPath}\\bin `
 			+ fileName,
 			{ shell: "powershell.exe", cwd: workPath, encoding: 'utf8' }
 		);
-		//console.log(chameleonProcess.stdout);
 		if (chameleonProcess.stdout === 'InfFailureUConsUnmatched'){
 			return undefined;
 		}
@@ -255,31 +223,3 @@ const getChemelionErrors = function (document: vscode.TextDocument, extentionPat
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
-export class CodeLensProvider implements vscode.CodeLensProvider {
-
-	public static readonly providedCodeActionKinds = [
-		vscode.CodeActionKind.QuickFix
-	];
-
-	provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[]{
-		//console.log(currentError)
-		//console.log("yeet")
-		if (!currentError) {
-			//console.log("no erroe")
-			return [];
-		}
-		const range = new vscode.Range(currentError.lineNumber, currentError.columnNumber, currentError.lineNumber, currentError.columnNumber);
-		const c: vscode.Command = {
-			command: 'haskell-debugging.toggleChameleon',
-			tooltip: 'Clear Chameleon Errors',
-			title: currentError.description + " (Click to toggle)"
-		} ;
-		let codeLens = new vscode.CodeLens(range, c);
-		//console.log(codeLens)
-		//console.log("codelens")
-		return [codeLens];
-	}
-
-}
-
-"https://cdn.mos.cms.futurecdn.net/gofvpedSqHBfoC3RKe559N.jpg";
